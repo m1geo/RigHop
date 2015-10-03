@@ -45,6 +45,7 @@ char * serialport = "/dev/ttyUSB1";
 
 #include <stdio.h>    // standard IO
 #include <string.h>   // string tools
+#include <signal.h>   // signals to catch CTRL+C
 #include <stdlib.h>   // malloc & free
 #include <unistd.h>   // usleep & write
 #include <time.h>     // localtime, strftime
@@ -61,6 +62,7 @@ typedef struct ranctx { u4 a; u4 b; u4 c; u4 d; } ranctx;
 int open_port(void);
 void sendtorig(long unsigned int);
 unsigned int str2hex(const char * s);
+void INThandler(int sig);
 u4 ranval( ranctx *x );
 void raninit( ranctx *x, u4 seed );
 
@@ -68,6 +70,7 @@ void raninit( ranctx *x, u4 seed );
 int port = 0;
 ranctx PRNG;
 unsigned int tCal;
+unsigned short runmainloop = 1;
 
 int main(int argc, char **argv)
 {
@@ -77,6 +80,10 @@ int main(int argc, char **argv)
 	struct timeval tv;
 	char buffer[30];
 	unsigned int R, F, T;
+
+	// for catching signals
+	signal(SIGINT, INThandler);
+
 	
 	printf("\033[2J");
 	printf("M1GEO - RigHop - Jumps Radio TRX Frequency in time.\nCurrent Timestamp:  ");
@@ -143,7 +150,7 @@ int main(int argc, char **argv)
 	tcsetattr(port, TCSANOW, &specs);
 	
 	// main loop
-	while (1)
+	while (runmainloop)
 	{
 		// get the current system clock
 		gettimeofday(&tv, NULL);
@@ -186,6 +193,10 @@ int main(int argc, char **argv)
 		fflush(stdout);
 		
 	}
+	printf("Leaving main loop.\n");
+	printf("Returning to home frequency.\n");
+	sendtorig(432.7E6);
+	usleep(1E6);
 	free (serialport);
 	return 0;
 }
@@ -255,4 +266,15 @@ void raninit( ranctx *x, u4 seed ) {
     for (i=0; i<20; ++i) {
         (void)ranval(x);
     }
+}
+
+void INThandler(int sig)
+{
+	char  c;
+	signal(sig, SIG_IGN);
+	printf("\nDo you really want to quit? [y/n] ");
+	c = getchar();
+	if (c == 'y' || c == 'Y') {
+		runmainloop = 0;
+	}
 }
