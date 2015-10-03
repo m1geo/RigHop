@@ -67,16 +67,18 @@ void raninit( ranctx *x, u4 seed );
 // global variables
 int port = 0;
 ranctx PRNG;
-unsigned int timingcalibration = 0;
+unsigned int tCal;
 
 int main(int argc, char **argv)
 {
-	unsigned int n_hop = sizeof(hopping_frequencies)/sizeof(hopping_frequencies[0]);
-	int i = 0;
+	//unsigned int n_hop = sizeof(hopping_frequencies)/sizeof(hopping_frequencies[0]);
+	//int i = 0;
 	time_t curtime;
 	struct timeval tv;
 	char buffer[30];
+	unsigned int R, F, T;
 	
+	printf("\033[2J");
 	printf("M1GEO - RigHop - Jumps Radio TRX Frequency in time.\nCurrent Timestamp:  ");
 	
 	gettimeofday(&tv, NULL);
@@ -105,18 +107,18 @@ int main(int argc, char **argv)
 	//}
 	//printf("OK\n");
 	
-	printf("Selected Hopping Frequencies:\n");
-	for (i=0; i<60; i++) {
-		printf("   %u:\t%.4f MHz\n", i, (double)((double)hopping_frequencies[hopping_pattern[i]]/(unsigned int)1e6));	
-	}
-	printf("\n");
+	//printf("Selected Hopping Frequencies: ");
+	//for (i=0; i<60; i++) {
+	//	printf("   %u:\t%.4f MHz\n", i, (double)((double)hopping_frequencies[hopping_pattern[i]]/(unsigned int)1e6));	
+	//}
+	//printf("\n");
 	
 	
 	//termios - structure contains options for port manipulation
 	struct termios specs; // for setting baud rate 
 
 	//setup part
-	printf("Opening serial port '%s' at 19200 for CI-V Address 0x%X.\n", serialport, rigaddress);
+	printf("Opening serial port '%s' at 19200 for CI-V Address 0x%X.\n\n\n\n\n", serialport, rigaddress);
 	port = open_port();
 	if (port < 0) {
 		return -1;
@@ -147,34 +149,37 @@ int main(int argc, char **argv)
 		gettimeofday(&tv, NULL);
 		
 		// work out time to next interval, and then set timer
-		usleep(1E6 - tv.tv_usec - timingcalibration);
+		
+		T = (1E6 - tv.tv_usec - tCal);
+		usleep(T);
 		
 		//update for actual running time
 		gettimeofday(&tv, NULL);
 		curtime=tv.tv_sec;
-			
-		if ( (tv.tv_usec > 0) && (tv.tv_usec < 5E5) ) {
-			timingcalibration += 1;
+		
+		// shuffle average along 1
+		if (tv.tv_usec < 5E5) {
+			tCal += (tv.tv_usec / 2);
 		} else {
-			if (timingcalibration > 0) {
-				timingcalibration -= 1;
-			}
+			tCal -= ((1E6-tv.tv_usec) / 2);
 		}
 		
-		unsigned int R;
 		if (tv.tv_usec >= 5E5) {
 			R = hopping_pattern[((tv.tv_sec+1)%60)];
 		} else {
 			R = hopping_pattern[tv.tv_sec%60];
 		}
-		long unsigned int F = hopping_frequencies[R];
+		F = hopping_frequencies[R];
 		
 		// push frequency to radio
 		sendtorig(F);
 		
 		// print wakeup time
-		strftime(buffer, 30 ,"%d/%m/%Y %T.", localtime(&curtime));
-		printf("%s%06ld (%u) : Hopping to %lu Hz.\n", buffer, tv.tv_usec, timingcalibration, F);
+		printf("\033[3A\r"); // jump up 2 lines
+		strftime(buffer, 30 ,"%d/%m/%Y, %T.", localtime(&curtime)); printf("\tTimestamp:\t%s%06ld\n", buffer, tv.tv_usec);
+		printf("\tFrequency:\t%.4f MHz\n", ((double)F/(double)1E6));
+		printf("\tTime Cal:\t%u us (T=%u us)\n", tCal, T);
+		fflush(stdout);
 		
 	}
 	free (serialport);
