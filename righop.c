@@ -164,6 +164,10 @@ int main(int argc, char **argv)
 			tCal -= ((1E6-tv.tv_usec) / 2);
 		}
 		
+		if (tCal > 1E3) {
+			tCal = 0;
+		}
+		
 		if (tv.tv_usec >= 5E5) {
 			R = hopping_pattern[((tv.tv_sec+1)%60)];
 		} else {
